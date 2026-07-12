@@ -8,6 +8,19 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type AuditEvent struct {
+	Seq           *int64             `json:"seq"`
+	ID            pgtype.UUID        `json:"id"`
+	DocumentID    pgtype.UUID        `json:"document_id"`
+	EventType     string             `json:"event_type"`
+	Message       string             `json:"message"`
+	ActorType     string             `json:"actor_type"`
+	ActorUserID   pgtype.UUID        `json:"actor_user_id"`
+	ActorSignerID pgtype.UUID        `json:"actor_signer_id"`
+	ActorLabel    string             `json:"actor_label"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+}
+
 type Document struct {
 	ID          pgtype.UUID        `json:"id"`
 	OwnerID     pgtype.UUID        `json:"owner_id"`

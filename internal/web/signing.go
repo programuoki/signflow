@@ -27,3 +27,14 @@ type SignerRoster struct {
 	Total   int
 	Signed  int
 }
+
+// AuditView is one row of the append-only trail, rendered in plain language.
+type AuditView struct {
+	Time       string
+	ActorLabel string
+	ActorType  string // user | signer | system | anonymous
+	Message    string
+	EventType  string
+	// Security marks a row that deserves visual emphasis (bad token / tamper).
+	Security bool
+}

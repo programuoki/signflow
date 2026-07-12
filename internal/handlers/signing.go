@@ -93,6 +93,12 @@ func (h *Handlers) InviteSigners(w http.ResponseWriter, r *http.Request) {
 		h.serverError(w, r, "mark sent", err)
 		return
 	}
+	if err := h.audit(r.Context(), q, doc.ID, evtSent,
+		fmt.Sprintf("Sent for signature to %d signer(s): %s", len(emails), strings.Join(emails, ", ")),
+		actorUser(user)); err != nil {
+		h.serverError(w, r, "audit sent", err)
+		return
+	}
 	if err := tx.Commit(r.Context()); err != nil {
 		h.serverError(w, r, "commit", err)
 		return
@@ -126,6 +132,11 @@ func (h *Handlers) SignPage(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	// Record that an outstanding signer opened their link — worth knowing.
+	if signer.Status == "pending" && !signerExpired(signer) {
+		h.auditBestEffort(r.Context(), doc.ID, evtViewed,
+			fmt.Sprintf("%s opened the signing link", signer.Email), actorSigner(signer))
+	}
 	h.renderSignState(w, r, signer, doc, "")
 }
 
@@ -145,12 +156,19 @@ func (h *Handlers) Sign(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	// Idempotent: re-posting a signed token just shows the signed state.
+	// Idempotent: re-posting a signed token just shows the signed state — but a
+	// spent token being re-used is a security-relevant event, so record it.
 	if signer.Status == "signed" {
+		h.auditBestEffort(r.Context(), doc.ID, evtBadToken,
+			fmt.Sprintf("Rejected repeat-sign attempt on an already-signed link (%s)", signer.Email),
+			actorSigner(signer))
 		h.renderSignState(w, r, signer, doc, "")
 		return
 	}
 	if signerExpired(signer) {
+		h.auditBestEffort(r.Context(), doc.ID, evtBadToken,
+			fmt.Sprintf("Rejected sign attempt via an expired link (%s)", signer.Email),
+			actorSigner(signer))
 		render(w, r, http.StatusOK, web.SignExpired(h.nav(r)))
 		return
 	}
@@ -192,6 +210,12 @@ func (h *Handlers) Sign(w http.ResponseWriter, r *http.Request) {
 		h.SignPage(w, r)
 		return
 	}
+	if err := h.audit(r.Context(), q, doc.ID, evtSigned,
+		fmt.Sprintf("%s signed as %q (SHA-256 at signing %s)", signer.Email, name, shortHash(integ.CurrentHash)),
+		actorSigner(signer)); err != nil {
+		h.serverError(w, r, "audit signed", err)
+		return
+	}
 
 	pending, err := q.CountPendingSigners(r.Context(), doc.ID)
 	if err != nil {
@@ -201,6 +225,11 @@ func (h *Handlers) Sign(w http.ResponseWriter, r *http.Request) {
 	if pending == 0 {
 		if err := q.MarkDocumentCompleted(r.Context(), doc.ID); err != nil {
 			h.serverError(w, r, "mark completed", err)
+			return
+		}
+		if err := h.audit(r.Context(), q, doc.ID, evtCompleted,
+			"All invited signers have signed — document completed", actorSystem()); err != nil {
+			h.serverError(w, r, "audit completed", err)
 			return
 		}
 	}
@@ -244,6 +273,11 @@ func (h *Handlers) renderSignState(w http.ResponseWriter, r *http.Request, signe
 	if err != nil {
 		h.serverError(w, r, "hash document", err)
 		return
+	}
+	if !integ.Matches {
+		h.auditBestEffort(r.Context(), doc.ID, evtTamper,
+			"Integrity check FAILED on signing view — stored file no longer matches the upload hash",
+			actorSigner(signer))
 	}
 	nav := h.nav(r)
 	docView := viewDocument(doc)

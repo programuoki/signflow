@@ -165,6 +165,49 @@ and reloading.)
 signature + maybe flip to completed) each run in a single Postgres transaction, so a
 half-finished invite can't leave a document `sent` with no signers.
 
+## Audit trail
+
+Every state change lands exactly one **append-only** row in `audit_events`: who,
+what, when. The owner's document page renders it as a chronological, plain-language
+event log (never raw JSON). Captured events: `document.uploaded`, `document.sent`,
+`signer.viewed`, `document.signed`, `document.completed`, `document.deleted`, plus the
+security-relevant `signer.bad_token` (a spent/expired link re-used) and
+`document.tamper_detected` (integrity check failed on view).
+
+**WHO — the actor problem.** An actor is *either* a registered user (the owner) *or* a
+signer (accountless) *or* the system (automatic transitions) *or* anonymous. Rather
+than force everything into a `user_id`, each row carries:
+`actor_type` (the discriminator) + nullable `actor_user_id` / `actor_signer_id` + a
+frozen `actor_label`. The ids are **FK-free plain UUIDs** so a row is self-contained,
+and `actor_label` (the email captured at event time) is what the UI shows — the trail
+stays readable with no joins even after the user/signer is gone.
+
+**Rows outlive what they describe.** `document_id` is also an FK-free UUID: deleting a
+draft removes the `documents` row but its audit events remain (a cascade would erase
+the evidence; a restrict would block the delete). Verified — after deleting a draft,
+its `uploaded` and `deleted` events are still queryable.
+
+**Append-only, enforced in the database.** A `BEFORE UPDATE OR DELETE`/`TRUNCATE`
+trigger `RAISE`s an exception, so `UPDATE`, `DELETE`, and `TRUNCATE` on `audit_events`
+all fail loudly:
+
+```
+ERROR:  audit_events is append-only: UPDATE is not permitted
+```
+
+Why a trigger and not `REVOKE`? The app connects as a **superuser** in dev, and
+superusers bypass table grants — the trigger's `RAISE` applies to everyone. It also
+fails loudly, unlike a rewrite `RULE` which would silently turn a mutation into a
+no-op. **Honest limit:** a superuser could still `DROP` the trigger; true immutability
+against a hostile DBA needs off-box log shipping. This stops the *application* — and
+any ordinary role — from ever rewriting history, which is the threat model that
+matters here.
+
+**Atomicity.** Each event is written in the **same transaction** as the state change
+it records (upload, invite, sign, delete), so a committed change can never be missing
+from the trail, and a rolled-back one leaves no phantom event. Read-path events
+(`viewed`, `tamper_detected`) are best-effort and only logged on failure.
+
 ## Domain
 
 - **users** — registration, login, logout, password reset.
@@ -237,5 +280,5 @@ This app is being built in phases:
 2. ✅ **Auth** — register / login / logout / password reset with server-side sessions, CSRF, bcrypt.
 3. ✅ **Documents** — upload (any type), SHA-256 hash, owner-scoped dashboard, view, download, delete-draft.
 4. ✅ **Signing** — invite (accountless tokened links), sign = name+time+doc hash, status transitions, tamper-evidence.
-5. ⬜ Audit trail.
+5. ✅ **Audit trail** — append-only `audit_events`, polymorphic actor, DB-enforced immutability, event-log UI.
 6. ⬜ Deploy to Railway.

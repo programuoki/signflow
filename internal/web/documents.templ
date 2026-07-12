@@ -96,7 +96,7 @@ templ documentRow(d DocumentView) {
 
 // DocumentDetail shows a document's metadata, integrity status, and — once sent —
 // the signer roster. While it's a draft, the owner can invite signers here.
-templ DocumentDetail(nav Nav, d DocumentView, integ IntegrityView, roster SignerRoster, errMsg string) {
+templ DocumentDetail(nav Nav, d DocumentView, integ IntegrityView, roster SignerRoster, events []AuditView, errMsg string) {
 	@Layout(d.Filename, nav) {
 		<p><a href="/dashboard">← Back to documents</a></p>
 		<section class="card">
@@ -191,7 +191,35 @@ templ DocumentDetail(nav Nav, d DocumentView, integ IntegrityView, roster Signer
 				</table>
 			</section>
 		}
+		@AuditLog(events)
 	}
+}
+
+// AuditLog renders the append-only trail in plain language: when, who, what.
+templ AuditLog(events []AuditView) {
+	<section class="card">
+		<h2>Audit trail</h2>
+		<p class="muted">Append-only. Every state change is recorded and can never be
+			edited or deleted — enforced in the database.</p>
+		if len(events) == 0 {
+			<p class="muted">No events yet.</p>
+		} else {
+			<ol class="audit">
+				for _, e := range events {
+					<li class={ "audit-item", templ.KV("audit-security", e.Security) }>
+						<div class="audit-when">{ e.Time }</div>
+						<div class="audit-body">
+							<div class="audit-msg">{ e.Message }</div>
+							<div class="audit-actor">
+								<span class={ "actor-tag", "actor-" + e.ActorType }>{ e.ActorType }</span>
+								{ e.ActorLabel }
+							</div>
+						</div>
+					</li>
+				}
+			</ol>
+		}
+	</section>
 }
 
 // shortHash abbreviates a hex hash for compact display.

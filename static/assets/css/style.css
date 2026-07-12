@@ -185,3 +185,20 @@ dl.meta dd { margin: 0; }
 	color: var(--muted); font-size: .85rem; line-height: 1.5;
 }
 .caveat strong { color: var(--text); }
+
+/* Audit trail */
+.audit { list-style: none; margin: .5rem 0 0; padding: 0; }
+.audit-item {
+	display: grid; grid-template-columns: 12.5rem 1fr; gap: 1rem;
+	padding: .7rem 0; border-bottom: 1px solid var(--border);
+}
+.audit-item:last-child { border-bottom: none; }
+.audit-when { color: var(--muted); font-size: .82rem; font-family: ui-monospace, Menlo, Consolas, monospace; }
+.audit-msg { color: var(--text); }
+.audit-actor { color: var(--muted); font-size: .82rem; margin-top: .2rem; }
+.audit-security { background: rgba(229,100,110,.07); border-left: 3px solid var(--danger); padding-left: .6rem; margin-left: -.6rem; }
+.actor-tag { display: inline-block; padding: 0 .4rem; border-radius: 4px; font-size: .72rem; font-weight: 600; margin-right: .4rem; text-transform: uppercase; letter-spacing: .03em; }
+.actor-user { background: rgba(109,123,255,.18); color: #b8c0ff; }
+.actor-signer { background: rgba(67,197,158,.18); color: var(--ok); }
+.actor-system { background: var(--surface-2); color: var(--muted); }
+.actor-anonymous { background: rgba(224,179,74,.18); color: var(--warn); }

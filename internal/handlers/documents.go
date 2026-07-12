@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -60,17 +61,41 @@ func (h *Handlers) UploadDocument(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	doc, err := h.Queries.CreateDocument(r.Context(), db.CreateDocumentParams{
+	// Create the document and its audit event in one transaction. If either
+	// fails, roll back and remove the just-saved blob so nothing is orphaned.
+	filename := sanitizeFilename(header.Filename)
+	tx, err := h.Pool.Begin(r.Context())
+	if err != nil {
+		_ = h.Store.Delete(r.Context(), key)
+		h.serverError(w, r, "begin tx", err)
+		return
+	}
+	defer tx.Rollback(context.Background())
+	q := h.Queries.WithTx(tx)
+
+	doc, err := q.CreateDocument(r.Context(), db.CreateDocumentParams{
 		OwnerID:     user.ID,
-		Filename:    sanitizeFilename(header.Filename),
+		Filename:    filename,
 		ContentType: contentType,
 		Size:        size,
 		FileHash:    hash,
 		StorageKey:  key,
 	})
 	if err != nil {
-		_ = h.Store.Delete(r.Context(), key) // don't orphan the blob
+		_ = h.Store.Delete(r.Context(), key)
 		h.serverError(w, r, "create document", err)
+		return
+	}
+	if err := h.audit(r.Context(), q, doc.ID, evtUploaded,
+		fmt.Sprintf("Uploaded %q (%s, SHA-256 %s)", filename, humanizeBytes(size), shortHash(hash)),
+		actorUser(user)); err != nil {
+		_ = h.Store.Delete(r.Context(), key)
+		h.serverError(w, r, "audit upload", err)
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		_ = h.Store.Delete(r.Context(), key)
+		h.serverError(w, r, "commit", err)
 		return
 	}
 	h.Log.Info("document uploaded", "id", doc.ID.String(), "owner", user.Email, "size", size, "sha256", hash)
@@ -101,8 +126,23 @@ func (h *Handlers) renderDocumentDetail(w http.ResponseWriter, r *http.Request, 
 		h.serverError(w, r, "list signers", err)
 		return
 	}
+
+	// A failed integrity check on view is itself an audited security event.
+	if !integ.Matches {
+		h.auditBestEffort(r.Context(), doc.ID, evtTamper,
+			"Integrity check FAILED on view — stored file no longer matches the upload hash",
+			actorUser(mustUser(r)))
+	}
+
+	events, err := h.Queries.ListAuditEventsByDocument(r.Context(), doc.ID)
+	if err != nil {
+		h.serverError(w, r, "list audit events", err)
+		return
+	}
+
 	render(w, r, http.StatusOK, web.DocumentDetail(
-		h.nav(r), viewDocument(doc), viewIntegrity(integ, doc), viewSigners(signers, doc), errMsg,
+		h.nav(r), viewDocument(doc), viewIntegrity(integ, doc), viewSigners(signers, doc),
+		viewAuditEvents(events), errMsg,
 	))
 }
 
@@ -160,13 +200,35 @@ func (h *Handlers) DeleteDocument(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	n, err := h.Queries.DeleteDraftDocument(r.Context(), db.DeleteDraftDocumentParams{ID: id, OwnerID: user.ID})
+	// Delete the row and record the audit event in one transaction. The event's
+	// document_id is FK-free, so this row (and every earlier one) survives the
+	// document's deletion — that's the whole point of the trail.
+	tx, err := h.Pool.Begin(r.Context())
+	if err != nil {
+		h.serverError(w, r, "begin tx", err)
+		return
+	}
+	defer tx.Rollback(context.Background())
+	q := h.Queries.WithTx(tx)
+
+	n, err := q.DeleteDraftDocument(r.Context(), db.DeleteDraftDocumentParams{ID: id, OwnerID: user.ID})
 	if err != nil {
 		h.serverError(w, r, "delete document", err)
 		return
 	}
 	if n == 1 {
-		// Best-effort blob cleanup; a leftover file is harmless but we try.
+		if err := h.audit(r.Context(), q, doc.ID, evtDeleted,
+			fmt.Sprintf("Deleted draft %q", doc.Filename), actorUser(user)); err != nil {
+			h.serverError(w, r, "audit delete", err)
+			return
+		}
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		h.serverError(w, r, "commit", err)
+		return
+	}
+	if n == 1 {
+		// Best-effort blob cleanup after commit; a leftover file is harmless.
 		_ = h.Store.Delete(r.Context(), doc.StorageKey)
 		h.Log.Info("document deleted", "id", doc.ID.String(), "owner", user.Email)
 	}
