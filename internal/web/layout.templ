@@ -3,7 +3,7 @@ package web
 // Layout is the shared HTML shell. Page templates call it and pass their body
 // as children. htmx is vendored under /static/js so the app has no runtime CDN
 // dependency.
-templ Layout(title string) {
+templ Layout(title string, nav Nav) {
 	<!DOCTYPE html>
 	<html lang="en">
 		<head>
@@ -16,7 +16,19 @@ templ Layout(title string) {
 		<body>
 			<header class="topbar">
 				<a href="/" class="brand">✍️ SignFlow</a>
-				<span class="tagline">document signing, honestly simplified</span>
+				<nav class="topnav">
+					if nav.LoggedIn {
+						<a href="/dashboard">Dashboard</a>
+						<span class="who">{ nav.Email }</span>
+						<form method="post" action="/logout" class="inline-form">
+							<input type="hidden" name="gorilla.csrf.Token" value={ nav.CSRFToken }/>
+							<button type="submit" class="btn btn-ghost btn-sm">Log out</button>
+						</form>
+					} else {
+						<a href="/login">Log in</a>
+						<a href="/register" class="btn btn-primary btn-sm">Register</a>
+					}
+				</nav>
 			</header>
 			<main class="container">
 				{ children... }

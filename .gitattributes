@@ -1,0 +1,6 @@
+# Keep line endings consistent (LF) across platforms. This repo is cloned on
+# Windows, macOS, and Linux, and Go tooling expects LF.
+* text=auto eol=lf
+
+# Generated/vendored assets — leave as-is.
+*.min.js binary

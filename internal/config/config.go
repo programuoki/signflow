@@ -24,6 +24,11 @@ type Config struct {
 	BaseURL string
 	// SessionSecret signs/authenticates session cookies. Must be set in prod.
 	SessionSecret string
+
+	// Email configuration. EmailSender is "console" (default) or "resend".
+	EmailSender  string
+	ResendAPIKey string
+	EmailFrom    string
 }
 
 func (c Config) IsProd() bool { return c.Env == "prod" }
@@ -39,6 +44,9 @@ func Load() (Config, error) {
 		Env:           getenv("APP_ENV", "dev"),
 		BaseURL:       os.Getenv("BASE_URL"),
 		SessionSecret: os.Getenv("SESSION_SECRET"),
+		EmailSender:   getenv("EMAIL_SENDER", "console"),
+		ResendAPIKey:  os.Getenv("RESEND_API_KEY"),
+		EmailFrom:     os.Getenv("EMAIL_FROM"),
 	}
 
 	if cfg.BaseURL == "" {

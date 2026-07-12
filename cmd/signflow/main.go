@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -22,7 +23,9 @@ import (
 	migrations "github.com/programuoki/signflow/db"
 	"github.com/programuoki/signflow/internal/config"
 	"github.com/programuoki/signflow/internal/db"
+	"github.com/programuoki/signflow/internal/email"
 	"github.com/programuoki/signflow/internal/handlers"
+	"github.com/programuoki/signflow/internal/session"
 	"github.com/programuoki/signflow/static"
 )
 
@@ -58,16 +61,22 @@ func run(log *slog.Logger) error {
 	defer pool.Close()
 
 	queries := db.New(pool)
-	h := handlers.New(cfg, queries, log)
+	sessions := session.NewManager(queries, cfg.IsProd())
+	mailer := email.New(cfg.EmailSender, cfg.ResendAPIKey, cfg.EmailFrom, log)
+	h := handlers.New(cfg, queries, sessions, mailer, log)
 
 	staticFS, err := fs.Sub(static.FS, "assets")
 	if err != nil {
 		return err
 	}
 
+	// Derive a stable 32-byte CSRF key from the session secret so there is only
+	// one secret to manage.
+	csrfKey := sha256.Sum256([]byte("csrf:" + cfg.SessionSecret))
+
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           h.Router(staticFS),
+		Handler:           h.Router(staticFS, csrfKey[:]),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 

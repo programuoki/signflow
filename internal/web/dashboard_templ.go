@@ -8,11 +8,9 @@ package web
 import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
-import "strconv"
-
-// Home is the public landing page. For the Phase 1 skeleton it also proves the
-// full stack is wired: the user count comes from Postgres via sqlc.
-func Home(nav Nav, userCount int64) templ.Component {
+// Dashboard is the signed-in landing page. Phase 2 shows just enough to prove
+// auth works; Phase 3 fills it with the owner's documents and their status.
+func Dashboard(nav Nav) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -45,26 +43,26 @@ func Home(nav Nav, userCount int64) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<section class=\"hero\"><h1>Sign documents. Keep the receipts.</h1><p class=\"lead\">Upload a document, invite signers by email, and collect typed signatures. Every action lands in an append-only audit trail.</p><div class=\"cta-row\"><a class=\"btn btn-primary\" href=\"/register\">Get started</a> <a class=\"btn btn-ghost\" href=\"/login\">Log in</a></div></section><section class=\"status-card\"><h2>Skeleton status</h2><ul class=\"checklist\"><li>✅ Chi router + middleware</li><li>✅ Templ rendering this page</li><li>✅ Postgres connected via pgx</li><li>✅ goose migrations applied</li></ul><p class=\"muted\">Registered users in the database: <strong>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<section class=\"hero\"><h1>Welcome back</h1><p class=\"lead\">You're signed in as <strong>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var3 string
-			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.FormatInt(userCount, 10))
+			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(nav.Email)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/home.templ`, Line: 29, Col: 80}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/dashboard.templ`, Line: 9, Col: 58}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</strong></p></section>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</strong>.</p></section><section class=\"card\"><h2>Your documents</h2><p class=\"muted\">Document upload arrives in Phase 3. For now, auth is live: your session is stored server-side and this page is protected by <code>RequireAuth</code>.</p></section>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = Layout("Home", nav).Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = Layout("Dashboard", nav).Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

@@ -54,6 +54,30 @@ which uses JWT. Same problem — "prove who this request is from" — two correc
 
 So SignFlow implements sessions idiomatically — not a JWT wearing a cookie costume.
 
+### Auth details
+
+- **Password hashing: bcrypt** (`golang.org/x/crypto/bcrypt`, cost 12). Chosen over
+  argon2id for a teaching codebase because it has one tuning knob instead of three,
+  embeds its cost in the hash string (trivial verification and rehashing), and ships
+  in the Go team's `x/crypto`. The honest tradeoff — argon2id is memory-hard and is
+  OWASP's first pick for new systems, and bcrypt truncates input at 72 bytes — is
+  handled by capping password length so nothing is silently truncated, and noted as
+  the upgrade path. See [`internal/auth/password.go`](internal/auth/password.go).
+- **Session tokens are hashed at rest.** The cookie carries a 256-bit random token;
+  the `sessions` table stores only its SHA-256 hash. A database dump yields no usable
+  sessions.
+- **Cookie flags:** `HttpOnly` always, `SameSite=Lax` always, `Secure` in production.
+  30-day lifetime. Verified: dev emits `HttpOnly; SameSite=Lax`, prod adds `Secure`.
+- **CSRF:** `gorilla/csrf` on every unsafe method, token embedded as a hidden field in
+  each form (and the logout button). Production keeps its strict Origin/Referer check;
+  local plaintext HTTP is explicitly marked so dev works without HTTPS.
+- **Account-enumeration resistant:** login uses one generic error for every failure,
+  and "forgot password" always shows the same confirmation whether or not the email
+  exists.
+- **Password reset:** single-use, 1-hour token (hash stored, raw token in the link).
+  Completing a reset burns all outstanding tokens and deletes all of that user's
+  sessions.
+
 ## Domain
 
 - **users** — registration, login, logout, password reset.
@@ -123,7 +147,7 @@ run every flow end to end with **no API key**. Set `EMAIL_SENDER=resend` +
 This app is being built in phases:
 
 1. ✅ **Skeleton** — module, Chi, Templ, goose, Postgres, one page rendering.
-2. ⬜ Auth — register / login / logout / password reset with sessions.
+2. ✅ **Auth** — register / login / logout / password reset with server-side sessions, CSRF, bcrypt.
 3. ⬜ Documents — upload, hash, dashboard.
 4. ⬜ Signing — invite, tokened link, sign, status transitions.
 5. ⬜ Audit trail.

@@ -4,8 +4,8 @@ import "strconv"
 
 // Home is the public landing page. For the Phase 1 skeleton it also proves the
 // full stack is wired: the user count comes from Postgres via sqlc.
-templ Home(userCount int64) {
-	@Layout("Home") {
+templ Home(nav Nav, userCount int64) {
+	@Layout("Home", nav) {
 		<section class="hero">
 			<h1>Sign documents. Keep the receipts.</h1>
 			<p class="lead">

@@ -1,0 +1,122 @@
+package web
+
+// authCSRF renders the hidden field gorilla/csrf expects on every POST form.
+templ authCSRF(token string) {
+	<input type="hidden" name="gorilla.csrf.Token" value={ token }/>
+}
+
+templ Register(nav Nav, email, errMsg string) {
+	@Layout("Register", nav) {
+		<div class="card auth-card">
+			<h1>Create your account</h1>
+			if errMsg != "" {
+				<div class="flash flash-error">{ errMsg }</div>
+			}
+			<form method="post" action="/register" class="form">
+				@authCSRF(nav.CSRFToken)
+				<div class="field">
+					<label for="email">Email</label>
+					<input id="email" name="email" type="email" value={ email } required autofocus/>
+				</div>
+				<div class="field">
+					<label for="password">Password</label>
+					<input id="password" name="password" type="password" minlength="8" maxlength="64" required/>
+				</div>
+				<div class="field">
+					<label for="confirm">Confirm password</label>
+					<input id="confirm" name="confirm" type="password" minlength="8" maxlength="64" required/>
+				</div>
+				<button class="btn btn-primary" type="submit">Create account</button>
+			</form>
+			<p class="muted">Already have an account? <a href="/login">Log in</a>.</p>
+		</div>
+	}
+}
+
+templ Login(nav Nav, email, errMsg string) {
+	@Layout("Log in", nav) {
+		<div class="card auth-card">
+			<h1>Log in</h1>
+			if errMsg != "" {
+				<div class="flash flash-error">{ errMsg }</div>
+			}
+			<form method="post" action="/login" class="form">
+				@authCSRF(nav.CSRFToken)
+				<div class="field">
+					<label for="email">Email</label>
+					<input id="email" name="email" type="email" value={ email } required autofocus/>
+				</div>
+				<div class="field">
+					<label for="password">Password</label>
+					<input id="password" name="password" type="password" required/>
+				</div>
+				<button class="btn btn-primary" type="submit">Log in</button>
+			</form>
+			<p class="muted">
+				<a href="/forgot">Forgot your password?</a> ·
+				No account? <a href="/register">Register</a>.
+			</p>
+		</div>
+	}
+}
+
+templ Forgot(nav Nav, submitted bool, email string) {
+	@Layout("Reset password", nav) {
+		<div class="card auth-card">
+			<h1>Reset your password</h1>
+			if submitted {
+				<div class="flash flash-ok">
+					If an account exists for <strong>{ email }</strong>, we've sent a
+					password-reset link. In development it is printed to the server log.
+				</div>
+				<p class="muted"><a href="/login">Back to log in</a></p>
+			} else {
+				<p class="muted">Enter your email and we'll send a reset link.</p>
+				<form method="post" action="/forgot" class="form">
+					@authCSRF(nav.CSRFToken)
+					<div class="field">
+						<label for="email">Email</label>
+						<input id="email" name="email" type="email" required autofocus/>
+					</div>
+					<button class="btn btn-primary" type="submit">Send reset link</button>
+				</form>
+			}
+		</div>
+	}
+}
+
+templ ResetPassword(nav Nav, token, errMsg string) {
+	@Layout("Choose a new password", nav) {
+		<div class="card auth-card">
+			<h1>Choose a new password</h1>
+			if errMsg != "" {
+				<div class="flash flash-error">{ errMsg }</div>
+			}
+			<form method="post" action={ templ.SafeURL("/reset/" + token) } class="form">
+				@authCSRF(nav.CSRFToken)
+				<div class="field">
+					<label for="password">New password</label>
+					<input id="password" name="password" type="password" minlength="8" maxlength="64" required autofocus/>
+				</div>
+				<div class="field">
+					<label for="confirm">Confirm new password</label>
+					<input id="confirm" name="confirm" type="password" minlength="8" maxlength="64" required/>
+				</div>
+				<button class="btn btn-primary" type="submit">Set new password</button>
+			</form>
+		</div>
+	}
+}
+
+// ResetInvalid is shown when a reset link is missing, expired, or already used.
+templ ResetInvalid(nav Nav) {
+	@Layout("Reset link invalid", nav) {
+		<div class="card auth-card">
+			<h1>This reset link is invalid</h1>
+			<p class="muted">
+				It may have expired or already been used. You can request a fresh one.
+			</p>
+			<a class="btn btn-primary" href="/forgot">Request a new link</a>
+		</div>
+	}
+}
