@@ -6,6 +6,8 @@ sign, and every action lands in an append-only audit trail.
 SignFlow is the **reference application for the Programuoki server-side web track**.
 It is a real, deployed system built to be read as much as run.
 
+**🌐 Live:** https://signflow-production-67f3.up.railway.app
+
 ## ⚠️ Signatures here are simplified — read this first
 
 A "signature" in SignFlow is a **typed name + a timestamp + the SHA-256 hash of the
@@ -278,13 +280,76 @@ sender is a **console sender that prints the link straight to the terminal** —
 run every flow end to end with **no API key**. Set `EMAIL_SENDER=resend` +
 `RESEND_API_KEY` for real delivery in production.
 
+## Deploy (Railway)
+
+Live at **https://signflow-production-67f3.up.railway.app**, on
+[Railway](https://railway.com) with a Postgres addon and a persistent Volume.
+
+**How it builds and runs.**
+- A multi-stage [`Dockerfile`](Dockerfile) produces a single static binary on
+  `distroless/static`. Migrations and static assets are embedded (`//go:embed`), so
+  the image ships nothing else, and the binary **auto-runs goose migrations on
+  startup** — a fresh deploy migrates itself.
+- [`railway.json`](railway.json) selects the Dockerfile builder and a `/healthz`
+  healthcheck.
+
+**Storage: a Railway Volume (not object storage).** Railway's container filesystem is
+**ephemeral** — it's wiped on every deploy — so `LocalStore` writing to `./uploads`
+would lose every upload on redeploy. A Volume is mounted at `/data` and `UPLOAD_DIR`
+points at `/data/uploads`. Chosen over S3/R2 because it's one config change with no new
+SDK or credentials, and the `storage.Store` interface already makes object storage a
+clean swap if horizontal scaling (multiple instances) is ever needed — a Volume binds
+to one instance. **Verified live:** upload a file, redeploy, download it again — same
+bytes, same hash.
+
+**Production configuration** (set on the Railway service; nothing is defaulted):
+
+| Variable         | Value                                        | Notes                                   |
+| ---------------- | -------------------------------------------- | --------------------------------------- |
+| `APP_ENV`        | `prod`                                       | flips `Secure` cookies + strict CSRF    |
+| `DATABASE_URL`   | `${{Postgres.DATABASE_URL}}`                 | reference to the Postgres addon         |
+| `SESSION_SECRET` | *(generated, `openssl rand -base64 32`)*     | **required** in prod                    |
+| `BASE_URL`       | `https://signflow-production-67f3.up.railway.app` | **required** in prod; used in email links |
+| `UPLOAD_DIR`     | `/data/uploads`                              | the mounted Volume                      |
+| `EMAIL_SENDER`   | `console` (default)                          | prints links to logs; set `resend` + `RESEND_API_KEY` for real email |
+| `PORT`           | *(injected by Railway)*                      | app listens on `$PORT`                  |
+
+The **console email sender is kept as the default even in production**, so the whole
+flow (registration, password reset, signer invites) works with **no API key** — the
+links print to the Railway deploy logs. Swap in Resend by setting `EMAIL_SENDER=resend`
+and `RESEND_API_KEY`.
+
+**Verified against the live URL** (not localhost): the session cookie carries
+`Secure` in prod; gorilla/csrf's strict Origin/Referer check is active (a POST with no
+`Origin`/`Referer` is rejected — the dev-only plaintext bypass is *not* in effect);
+and the full flow runs end to end — register → password reset (link read from the
+deploy logs) → upload → invite two signers → both sign → document `completed` → audit
+trail intact — followed by a redeploy that left the uploaded file untouched.
+
+**Reproducing the deploy** (Railway CLI):
+
+```bash
+railway login
+railway init --name signflow
+railway add --database postgres
+railway add --service signflow \
+  --variables APP_ENV=prod \
+  --variables 'DATABASE_URL=${{Postgres.DATABASE_URL}}' \
+  --variables UPLOAD_DIR=/data/uploads \
+  --variables "SESSION_SECRET=$(openssl rand -base64 32)"
+railway domain                       # note the URL, then:
+railway variables --set "BASE_URL=https://<your-domain>.up.railway.app"
+railway volume add --mount-path /data
+railway up                           # builds the Dockerfile and deploys
+```
+
 ## Build status
 
-This app is being built in phases:
+This app is built in phases:
 
 1. ✅ **Skeleton** — module, Chi, Templ, goose, Postgres, one page rendering.
 2. ✅ **Auth** — register / login / logout / password reset with server-side sessions, CSRF, bcrypt.
 3. ✅ **Documents** — upload (any type), SHA-256 hash, owner-scoped dashboard, view, download, delete-draft.
 4. ✅ **Signing** — invite (accountless tokened links), sign = name+time+doc hash, status transitions, tamper-evidence.
 5. ✅ **Audit trail** — append-only `audit_events`, polymorphic actor, DB-enforced immutability, event-log UI.
-6. ⬜ Deploy to Railway.
+6. ✅ **Deploy** — Railway (Dockerfile + Postgres addon + Volume), live and verified end to end.

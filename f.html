@@ -1,0 +1,9 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="csrf-token" content="xY+YYKG330G7NZJkXLCosdIMg6pjUOWMuQMe9aTt3Lu9gd6NJ4CwWCFwkBqANeW7iFmzSwcRzDJMLpj7eIvLQQ=="><title>Reset password · SignFlow</title><link rel="stylesheet" href="/static/css/style.css"><script src="/static/js/htmx.min.js"></script><script>
+				// Attach the CSRF token to every htmx request as a header. gorilla/csrf
+				// reads X-CSRF-Token before touching the body, so multipart uploads
+				// aren't parsed twice.
+				document.addEventListener('htmx:configRequest', function (e) {
+					var m = document.querySelector('meta[name="csrf-token"]');
+					if (m) e.detail.headers['X-CSRF-Token'] = m.getAttribute('content');
+				});
+			</script></head><body><header class="topbar"><a href="/" class="brand">✍️ SignFlow</a><nav class="topnav"><a href="/login">Log in</a> <a href="/register" class="btn btn-primary btn-sm">Register</a></nav></header><main class="container"><div class="card auth-card"><h1>Reset your password</h1><p class="muted">Enter your email and we'll send a reset link.</p><form method="post" action="/forgot" class="form"><input type="hidden" name="gorilla.csrf.Token" value="xY+YYKG330G7NZJkXLCosdIMg6pjUOWMuQMe9aTt3Lu9gd6NJ4CwWCFwkBqANeW7iFmzSwcRzDJMLpj7eIvLQQ=="><div class="field"><label for="email">Email</label> <input id="email" name="email" type="email" required autofocus></div><button class="btn btn-primary" type="submit">Send reset link</button></form></div></main><footer class="footer"><p>SignFlow — reference app for the Programuoki server-side web track.</p></footer></body></html>
