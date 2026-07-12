@@ -94,8 +94,9 @@ templ documentRow(d DocumentView) {
 	</tr>
 }
 
-// DocumentDetail shows a single document's metadata, hash, and status.
-templ DocumentDetail(nav Nav, d DocumentView) {
+// DocumentDetail shows a document's metadata, integrity status, and — once sent —
+// the signer roster. While it's a draft, the owner can invite signers here.
+templ DocumentDetail(nav Nav, d DocumentView, integ IntegrityView, roster SignerRoster, errMsg string) {
 	@Layout(d.Filename, nav) {
 		<p><a href="/dashboard">← Back to documents</a></p>
 		<section class="card">
@@ -103,6 +104,7 @@ templ DocumentDetail(nav Nav, d DocumentView) {
 				<h1>{ d.Filename }</h1>
 				<span class={ "pill", "pill-" + d.Status }>{ d.Status }</span>
 			</div>
+			@integrityBanner(integ)
 			<dl class="meta">
 				<dt>Type</dt>
 				<dd>{ d.ContentType }</dd>
@@ -122,8 +124,80 @@ templ DocumentDetail(nav Nav, d DocumentView) {
 					</form>
 				}
 			</div>
-			<p class="muted">The SHA-256 above was computed at upload time. Re-download and
-				hash the file to confirm the bytes are unchanged.</p>
 		</section>
+		if d.IsDraft {
+			<section class="card">
+				<h2>Invite signers</h2>
+				<p class="muted">Enter one or more email addresses. Sending will move this
+					document from <em>draft</em> to <em>sent</em> and email each signer a
+					private signing link.</p>
+				if errMsg != "" {
+					<div class="flash flash-error">{ errMsg }</div>
+				}
+				<form method="post" action={ templ.SafeURL("/documents/" + d.ID + "/invite") } class="form">
+					@authCSRF(nav.CSRFToken)
+					<div class="field">
+						<label for="emails">Signer emails (one per line, or comma-separated)</label>
+						<textarea id="emails" name="emails" rows="3" placeholder="alice@example.com&#10;bob@example.com" required></textarea>
+					</div>
+					<button class="btn btn-primary" type="submit">Send for signature</button>
+				</form>
+			</section>
+		} else {
+			<section class="card">
+				<h2>Signers <span class="muted">({ fmt.Sprintf("%d of %d signed", roster.Signed, roster.Total) })</span></h2>
+				<table class="table">
+					<thead>
+						<tr>
+							<th>Email</th>
+							<th>Status</th>
+							<th>Signed as</th>
+							<th>Signed at</th>
+							<th>Hash signed</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, s := range roster.Signers {
+							<tr>
+								<td>{ s.Email }</td>
+								<td><span class={ "pill", "pill-" + s.Status }>{ s.Status }</span></td>
+								<td>
+									if s.IsSigned {
+										{ s.SignedName }
+									} else {
+										<span class="muted">—</span>
+									}
+								</td>
+								<td>
+									if s.IsSigned {
+										{ s.SignedAt }
+									} else {
+										<span class="muted">—</span>
+									}
+								</td>
+								<td>
+									if s.IsSigned {
+										<code class="hash-short">{ shortHash(s.SignedDocHash) }</code>
+										if !s.HashMatchesNow {
+											<span class="tag-warn" title="This signature was made against a different hash than the file now holds">⚠ differs</span>
+										}
+									} else {
+										<span class="muted">—</span>
+									}
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</section>
+		}
 	}
+}
+
+// shortHash abbreviates a hex hash for compact display.
+func shortHash(h string) string {
+	if len(h) <= 16 {
+		return h
+	}
+	return h[:8] + "…" + h[len(h)-8:]
 }

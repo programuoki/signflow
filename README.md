@@ -118,6 +118,53 @@ unchanged.
 > rewrite. We'll make the call in the deploy phase; flagging it here so it's a decision,
 > not a surprise.
 
+## Signing
+
+Signing is the heart of the app, and where the honesty caveat is earned.
+
+**The flow.** The owner opens a draft and invites signers by email (one or many).
+Sending flips the document **draft → sent** and emails each signer a private
+tokened link. A signer **is not a user** — no account, no password. They open the
+link, download and review the document, type their name, and sign. When the last
+outstanding signer signs, the document flips **sent → completed**. The owner's
+document page shows the full roster: who has signed, their typed name, and the
+timestamp.
+
+**What a signature is.** `typed name + timestamp + SHA-256 of the document at
+signing time`, captured on the signer's row. The hash is recomputed from the stored
+bytes at the moment of signing — not trusted from the record — so it attests to what
+was actually there. See the caveat at the top of this README: this is tamper-evident
+integrity and nothing more.
+
+**Tamper-evidence, demonstrated.** Every time a document is shown (owner page or
+signing page) SignFlow re-hashes the stored file and compares it to the hash recorded
+at upload. If they differ, a loud **⚠ TAMPER DETECTED** banner appears with both
+hashes. That is the *entire* security guarantee, made visible: change one byte of the
+stored file and the app tells you. (Verified by appending a byte to the file on disk
+and reloading.)
+
+### Token design (a deliberate lesson)
+
+- **The token is the authorization.** A signer presents only the token in their URL.
+  It maps to exactly one `signers` row (the `token_hash` column is `UNIQUE`), so a
+  signer structurally cannot reach another signer's row or another document — there is
+  no document/row ID in the request to tamper with. A garbage token is a 404.
+- **We store the hash, never the token.** Same as sessions and password resets: the
+  emailed link carries the raw token; the database keeps only its SHA-256. A DB leak
+  exposes no working links.
+- **Single-use for *signing*, reusable for *viewing*.** The link stays openable so a
+  signer can reopen it, re-download, and read before committing — but the signing
+  action is single-use. The `UPDATE ... WHERE id = $1 AND status = 'pending'` guard
+  means a second submit updates zero rows; the page just shows the already-signed
+  state (idempotent). Re-posting a spent token creates no second signature.
+- **Bounded validity: 30 days.** Signers take days, not minutes, so expiry is generous
+  — but it *is* bounded, so a leaked link isn't useful forever. Expired links show an
+  "expired" page instead of the form.
+
+**Atomicity.** Inviting (create N signers + flip to sent) and signing (record
+signature + maybe flip to completed) each run in a single Postgres transaction, so a
+half-finished invite can't leave a document `sent` with no signers.
+
 ## Domain
 
 - **users** — registration, login, logout, password reset.
@@ -189,6 +236,6 @@ This app is being built in phases:
 1. ✅ **Skeleton** — module, Chi, Templ, goose, Postgres, one page rendering.
 2. ✅ **Auth** — register / login / logout / password reset with server-side sessions, CSRF, bcrypt.
 3. ✅ **Documents** — upload (any type), SHA-256 hash, owner-scoped dashboard, view, download, delete-draft.
-4. ⬜ Signing — invite, tokened link, sign, status transitions.
+4. ✅ **Signing** — invite (accountless tokened links), sign = name+time+doc hash, status transitions, tamper-evidence.
 5. ⬜ Audit trail.
 6. ⬜ Deploy to Railway.

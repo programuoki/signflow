@@ -70,6 +70,29 @@ func (q *Queries) DeleteDraftDocument(ctx context.Context, arg DeleteDraftDocume
 	return result.RowsAffected(), nil
 }
 
+const getDocument = `-- name: GetDocument :one
+SELECT id, owner_id, filename, content_type, size, file_hash, storage_key, status, created_at FROM documents WHERE id = $1
+`
+
+// Unscoped read by id. ONLY for flows already authorized by a signer token —
+// never call this directly from a user-facing route (use GetDocumentForOwner).
+func (q *Queries) GetDocument(ctx context.Context, id pgtype.UUID) (Document, error) {
+	row := q.db.QueryRow(ctx, getDocument, id)
+	var i Document
+	err := row.Scan(
+		&i.ID,
+		&i.OwnerID,
+		&i.Filename,
+		&i.ContentType,
+		&i.Size,
+		&i.FileHash,
+		&i.StorageKey,
+		&i.Status,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getDocumentForOwner = `-- name: GetDocumentForOwner :one
 SELECT id, owner_id, filename, content_type, size, file_hash, storage_key, status, created_at FROM documents
 WHERE id = $1 AND owner_id = $2
@@ -133,4 +156,33 @@ func (q *Queries) ListDocumentsByOwner(ctx context.Context, ownerID pgtype.UUID)
 		return nil, err
 	}
 	return items, nil
+}
+
+const markDocumentCompleted = `-- name: MarkDocumentCompleted :exec
+UPDATE documents SET status = 'completed' WHERE id = $1
+`
+
+func (q *Queries) MarkDocumentCompleted(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, markDocumentCompleted, id)
+	return err
+}
+
+const markDocumentSent = `-- name: MarkDocumentSent :execrows
+UPDATE documents SET status = 'sent'
+WHERE id = $1 AND owner_id = $2 AND status = 'draft'
+`
+
+type MarkDocumentSentParams struct {
+	ID      pgtype.UUID `json:"id"`
+	OwnerID pgtype.UUID `json:"owner_id"`
+}
+
+// draft -> sent. Owner-scoped and draft-guarded, so it is idempotent-safe and
+// can't resurrect a completed document.
+func (q *Queries) MarkDocumentSent(ctx context.Context, arg MarkDocumentSentParams) (int64, error) {
+	result, err := q.db.Exec(ctx, markDocumentSent, arg.ID, arg.OwnerID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

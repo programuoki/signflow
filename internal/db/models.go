@@ -37,6 +37,19 @@ type Session struct {
 	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
 }
 
+type Signer struct {
+	ID            pgtype.UUID        `json:"id"`
+	DocumentID    pgtype.UUID        `json:"document_id"`
+	Email         string             `json:"email"`
+	TokenHash     string             `json:"token_hash"`
+	Status        string             `json:"status"`
+	SignedName    *string            `json:"signed_name"`
+	SignedAt      pgtype.Timestamptz `json:"signed_at"`
+	SignedDocHash *string            `json:"signed_doc_hash"`
+	ExpiresAt     pgtype.Timestamptz `json:"expires_at"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+}
+
 type User struct {
 	ID           pgtype.UUID        `json:"id"`
 	Email        string             `json:"email"`

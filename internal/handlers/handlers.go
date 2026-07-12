@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/programuoki/signflow/internal/config"
 	"github.com/programuoki/signflow/internal/db"
 	"github.com/programuoki/signflow/internal/email"
@@ -17,6 +19,7 @@ import (
 // in main and its methods are registered on the router.
 type Handlers struct {
 	Cfg      config.Config
+	Pool     *pgxpool.Pool // for multi-statement transactions
 	Queries  *db.Queries
 	Sessions *session.Manager
 	Mailer   email.Sender
@@ -24,8 +27,8 @@ type Handlers struct {
 	Log      *slog.Logger
 }
 
-func New(cfg config.Config, q *db.Queries, sessions *session.Manager, mailer email.Sender, store storage.Store, log *slog.Logger) *Handlers {
-	return &Handlers{Cfg: cfg, Queries: q, Sessions: sessions, Mailer: mailer, Store: store, Log: log}
+func New(cfg config.Config, pool *pgxpool.Pool, q *db.Queries, sessions *session.Manager, mailer email.Sender, store storage.Store, log *slog.Logger) *Handlers {
+	return &Handlers{Cfg: cfg, Pool: pool, Queries: q, Sessions: sessions, Mailer: mailer, Store: store, Log: log}
 }
 
 // Home renders the landing page. If the visitor is signed in we send them to

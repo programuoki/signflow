@@ -67,6 +67,12 @@ func (h *Handlers) Router(staticFS fs.FS, csrfKey []byte) http.Handler {
 	r.Get("/reset/{token}", h.ResetForm)
 	r.Post("/reset/{token}", h.Reset)
 
+	// Signer routes — no account required. The token in the URL is the entire
+	// authorization, so these live outside the authenticated group.
+	r.Get("/sign/{token}", h.SignPage)
+	r.Post("/sign/{token}", h.Sign)
+	r.Get("/sign/{token}/download", h.SignDownload)
+
 	// Authenticated routes.
 	r.Group(func(pr chi.Router) {
 		pr.Use(h.RequireAuth)
@@ -76,6 +82,7 @@ func (h *Handlers) Router(staticFS fs.FS, csrfKey []byte) http.Handler {
 		pr.Get("/documents/{id}", h.ViewDocument)
 		pr.Get("/documents/{id}/download", h.DownloadDocument)
 		pr.Post("/documents/{id}/delete", h.DeleteDocument)
+		pr.Post("/documents/{id}/invite", h.InviteSigners)
 	})
 
 	return r

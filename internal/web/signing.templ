@@ -1,0 +1,112 @@
+package web
+
+// integrityBanner shows whether the stored file still matches its upload hash.
+// A mismatch is shown LOUDLY — it is the one security property this app has.
+templ integrityBanner(integ IntegrityView) {
+	if integ.Matches {
+		<div class="integrity integrity-ok">
+			✓ Integrity verified — the stored file still matches the SHA-256 recorded at upload.
+		</div>
+	} else {
+		<div class="integrity integrity-bad">
+			<strong>⚠ TAMPER DETECTED.</strong> The stored file no longer matches the
+			SHA-256 recorded at upload. It has been altered since it was uploaded.
+			<div class="hash-compare">
+				<div><span>recorded at upload:</span> <code>{ integ.StoredHash }</code></div>
+				<div><span>file right now:</span> <code>{ integ.CurrentHash }</code></div>
+			</div>
+		</div>
+	}
+}
+
+// signatureCaveat is the honesty note shown wherever a signature is made or displayed.
+templ signatureCaveat() {
+	<p class="caveat">
+		<strong>About this signature:</strong> it is your typed name, the time, and a
+		SHA-256 fingerprint of the document at signing. That makes it
+		<em>tamper-evident</em> — you can tell if the document changed afterward — and
+		nothing more. It is <strong>not</strong> a qualified or eIDAS electronic
+		signature and is not proof of identity.
+	</p>
+}
+
+// SignForm is the signer's page: review the document, then type a name to sign.
+templ SignForm(nav Nav, d DocumentView, integ IntegrityView, signerEmail, token, errMsg string) {
+	@Layout("Sign "+d.Filename, nav) {
+		<div class="card sign-card">
+			<h1>Sign this document</h1>
+			<p class="muted">Invited as <strong>{ signerEmail }</strong>. No account needed —
+				this link is your authorization to sign.</p>
+			@integrityBanner(integ)
+			<dl class="meta">
+				<dt>Document</dt>
+				<dd>{ d.Filename }</dd>
+				<dt>Type</dt>
+				<dd>{ d.ContentType }</dd>
+				<dt>Size</dt>
+				<dd>{ d.SizeHuman }</dd>
+				<dt>SHA-256</dt>
+				<dd><code class="hash">{ d.FileHash }</code></dd>
+			</dl>
+			<p>
+				<a class="btn btn-ghost" href={ templ.SafeURL("/sign/" + token + "/download") }>Download &amp; review</a>
+			</p>
+			if errMsg != "" {
+				<div class="flash flash-error">{ errMsg }</div>
+			}
+			<form method="post" action={ templ.SafeURL("/sign/" + token) } class="form sign-form">
+				@authCSRF(nav.CSRFToken)
+				<div class="field">
+					<label for="signed_name">Type your full name to sign</label>
+					<input id="signed_name" name="signed_name" type="text" maxlength="200" required autocomplete="name" autofocus/>
+				</div>
+				<button class="btn btn-primary" type="submit">Sign document</button>
+			</form>
+			@signatureCaveat()
+		</div>
+	}
+}
+
+// SignDone is shown after a signer has signed (and on revisiting their link).
+templ SignDone(nav Nav, d DocumentView, integ IntegrityView, signer SignerView) {
+	@Layout("Signed", nav) {
+		<div class="card sign-card">
+			<h1>✓ You've signed</h1>
+			<div class="flash flash-ok">
+				Signed as <strong>{ signer.SignedName }</strong> on { signer.SignedAt }.
+			</div>
+			@integrityBanner(integ)
+			<dl class="meta">
+				<dt>Document</dt>
+				<dd>{ d.Filename }</dd>
+				<dt>Signed by</dt>
+				<dd>{ signer.SignedName } &lt;{ signer.Email }&gt;</dd>
+				<dt>Signed at</dt>
+				<dd>{ signer.SignedAt }</dd>
+				<dt>Document hash you signed</dt>
+				<dd><code class="hash">{ signer.SignedDocHash }</code></dd>
+			</dl>
+			@signatureCaveat()
+		</div>
+	}
+}
+
+templ SignExpired(nav Nav) {
+	@Layout("Link expired", nav) {
+		<div class="card sign-card">
+			<h1>This signing link has expired</h1>
+			<p class="muted">Signing links are valid for 30 days. Ask the document owner
+				to send you a fresh invitation.</p>
+		</div>
+	}
+}
+
+templ SignInvalid(nav Nav) {
+	@Layout("Invalid link", nav) {
+		<div class="card sign-card">
+			<h1>This signing link is invalid</h1>
+			<p class="muted">The link may be mistyped or the invitation may have been
+				withdrawn. Check the link in your email.</p>
+		</div>
+	}
+}

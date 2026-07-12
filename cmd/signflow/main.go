@@ -69,7 +69,7 @@ func run(log *slog.Logger) error {
 		return err
 	}
 	log.Info("file storage: local disk", "dir", cfg.UploadDir)
-	h := handlers.New(cfg, queries, sessions, mailer, store, log)
+	h := handlers.New(cfg, pool, queries, sessions, mailer, store, log)
 
 	staticFS, err := fs.Sub(static.FS, "assets")
 	if err != nil {

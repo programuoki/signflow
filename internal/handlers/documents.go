@@ -78,13 +78,32 @@ func (h *Handlers) UploadDocument(w http.ResponseWriter, r *http.Request) {
 	h.respondWithDocList(w, r, user)
 }
 
-// ViewDocument renders a single document's detail page (owner only).
+// ViewDocument renders a single document's detail page (owner only): metadata,
+// an integrity check, and the signer roster.
 func (h *Handlers) ViewDocument(w http.ResponseWriter, r *http.Request) {
 	doc, ok := h.ownedDocument(w, r)
 	if !ok {
 		return
 	}
-	render(w, r, http.StatusOK, web.DocumentDetail(h.nav(r), viewDocument(doc)))
+	h.renderDocumentDetail(w, r, doc, "")
+}
+
+// renderDocumentDetail loads the integrity status and signer roster and renders
+// the owner detail page, optionally with an inline error (e.g. bad invite input).
+func (h *Handlers) renderDocumentDetail(w http.ResponseWriter, r *http.Request, doc db.Document, errMsg string) {
+	integ, err := h.checkIntegrity(r.Context(), doc)
+	if err != nil {
+		h.serverError(w, r, "hash document", err)
+		return
+	}
+	signers, err := h.Queries.ListSignersByDocument(r.Context(), doc.ID)
+	if err != nil {
+		h.serverError(w, r, "list signers", err)
+		return
+	}
+	render(w, r, http.StatusOK, web.DocumentDetail(
+		h.nav(r), viewDocument(doc), viewIntegrity(integ, doc), viewSigners(signers, doc), errMsg,
+	))
 }
 
 // DownloadDocument streams the stored file back with its original name (owner only).
@@ -93,6 +112,12 @@ func (h *Handlers) DownloadDocument(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	h.streamDocument(w, r, doc)
+}
+
+// streamDocument writes the stored file as an attachment. Shared by the owner
+// download route and the tokened signer download route.
+func (h *Handlers) streamDocument(w http.ResponseWriter, r *http.Request, doc db.Document) {
 	rc, err := h.Store.Open(r.Context(), doc.StorageKey)
 	if err != nil {
 		h.serverError(w, r, "open file", err)
