@@ -208,6 +208,12 @@ it records (upload, invite, sign, delete), so a committed change can never be mi
 from the trail, and a rolled-back one leaves no phantom event. Read-path events
 (`viewed`, `tamper_detected`) are best-effort and only logged on failure.
 
+**Ordering: a `seq` column, not the timestamp.** `now()` is the *transaction start*
+time in Postgres, so two events in one transaction (e.g. `signed` + `completed`) share
+a `created_at` and can't be ordered by it. A monotonic `seq BIGINT GENERATED ALWAYS AS
+IDENTITY` gives a stable total order; the UI sorts by it. (Timestamps are still shown —
+they're just not the sort key.)
+
 ## Domain
 
 - **users** — registration, login, logout, password reset.
