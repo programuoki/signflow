@@ -1,0 +1,15 @@
+# Binaries
+/bin/
+/signflow
+/signflow.exe
+*.exe
+
+# Local env / secrets
+.env
+
+# Local uploads (documents stored on disk in dev)
+/uploads/
+
+# Editor
+.DS_Store
+.idea/

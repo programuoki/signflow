@@ -1,0 +1,16 @@
+version: "2"
+sql:
+  - engine: "postgresql"
+    # Schema is read from the goose migration files themselves, so sqlc and the
+    # runtime database can never drift apart.
+    schema: "db/migrations"
+    queries: "internal/db/queries"
+    gen:
+      go:
+        package: "db"
+        out: "internal/db"
+        sql_package: "pgx/v5"
+        emit_json_tags: true
+        emit_interface: false
+        emit_empty_slices: true
+        emit_pointers_for_null_types: true
