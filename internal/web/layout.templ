@@ -9,9 +9,19 @@ templ Layout(title string, nav Nav) {
 		<head>
 			<meta charset="utf-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<meta name="csrf-token" content={ nav.CSRFToken }/>
 			<title>{ title } · SignFlow</title>
 			<link rel="stylesheet" href="/static/css/style.css"/>
 			<script src="/static/js/htmx.min.js"></script>
+			<script>
+				// Attach the CSRF token to every htmx request as a header. gorilla/csrf
+				// reads X-CSRF-Token before touching the body, so multipart uploads
+				// aren't parsed twice.
+				document.addEventListener('htmx:configRequest', function (e) {
+					var m = document.querySelector('meta[name="csrf-token"]');
+					if (m) e.detail.headers['X-CSRF-Token'] = m.getAttribute('content');
+				});
+			</script>
 		</head>
 		<body>
 			<header class="topbar">

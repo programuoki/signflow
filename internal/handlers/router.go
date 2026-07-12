@@ -71,6 +71,11 @@ func (h *Handlers) Router(staticFS fs.FS, csrfKey []byte) http.Handler {
 	r.Group(func(pr chi.Router) {
 		pr.Use(h.RequireAuth)
 		pr.Get("/dashboard", h.Dashboard)
+
+		pr.Post("/documents", h.UploadDocument)
+		pr.Get("/documents/{id}", h.ViewDocument)
+		pr.Get("/documents/{id}/download", h.DownloadDocument)
+		pr.Post("/documents/{id}/delete", h.DeleteDocument)
 	})
 
 	return r

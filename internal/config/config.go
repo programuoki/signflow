@@ -29,6 +29,13 @@ type Config struct {
 	EmailSender  string
 	ResendAPIKey string
 	EmailFrom    string
+
+	// UploadDir is where document files are stored on the local filesystem.
+	// NOTE: Railway's container filesystem is ephemeral — see README. In prod,
+	// point this at a mounted Railway Volume (or swap in object storage).
+	UploadDir string
+	// MaxUploadBytes caps a single upload.
+	MaxUploadBytes int64
 }
 
 func (c Config) IsProd() bool { return c.Env == "prod" }
@@ -39,14 +46,16 @@ func Load() (Config, error) {
 	_ = godotenv.Load() // best-effort; fine if there is no .env
 
 	cfg := Config{
-		DatabaseURL:   getenv("DATABASE_URL", "postgres://postgres@localhost:5432/signflow?sslmode=disable"),
-		Port:          getenv("PORT", "8080"),
-		Env:           getenv("APP_ENV", "dev"),
-		BaseURL:       os.Getenv("BASE_URL"),
-		SessionSecret: os.Getenv("SESSION_SECRET"),
-		EmailSender:   getenv("EMAIL_SENDER", "console"),
-		ResendAPIKey:  os.Getenv("RESEND_API_KEY"),
-		EmailFrom:     os.Getenv("EMAIL_FROM"),
+		DatabaseURL:    getenv("DATABASE_URL", "postgres://postgres@localhost:5432/signflow?sslmode=disable"),
+		Port:           getenv("PORT", "8080"),
+		Env:            getenv("APP_ENV", "dev"),
+		BaseURL:        os.Getenv("BASE_URL"),
+		SessionSecret:  os.Getenv("SESSION_SECRET"),
+		EmailSender:    getenv("EMAIL_SENDER", "console"),
+		ResendAPIKey:   os.Getenv("RESEND_API_KEY"),
+		EmailFrom:      os.Getenv("EMAIL_FROM"),
+		UploadDir:      getenv("UPLOAD_DIR", "uploads"),
+		MaxUploadBytes: 25 << 20, // 25 MiB
 	}
 
 	if cfg.BaseURL == "" {

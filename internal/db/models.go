@@ -8,6 +8,18 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type Document struct {
+	ID          pgtype.UUID        `json:"id"`
+	OwnerID     pgtype.UUID        `json:"owner_id"`
+	Filename    string             `json:"filename"`
+	ContentType string             `json:"content_type"`
+	Size        int64              `json:"size"`
+	FileHash    string             `json:"file_hash"`
+	StorageKey  string             `json:"storage_key"`
+	Status      string             `json:"status"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
 type PasswordResetToken struct {
 	ID        pgtype.UUID        `json:"id"`
 	TokenHash string             `json:"token_hash"`

@@ -9,6 +9,7 @@ import (
 	"github.com/programuoki/signflow/internal/db"
 	"github.com/programuoki/signflow/internal/email"
 	"github.com/programuoki/signflow/internal/session"
+	"github.com/programuoki/signflow/internal/storage"
 	"github.com/programuoki/signflow/internal/web"
 )
 
@@ -19,11 +20,12 @@ type Handlers struct {
 	Queries  *db.Queries
 	Sessions *session.Manager
 	Mailer   email.Sender
+	Store    storage.Store
 	Log      *slog.Logger
 }
 
-func New(cfg config.Config, q *db.Queries, sessions *session.Manager, mailer email.Sender, log *slog.Logger) *Handlers {
-	return &Handlers{Cfg: cfg, Queries: q, Sessions: sessions, Mailer: mailer, Log: log}
+func New(cfg config.Config, q *db.Queries, sessions *session.Manager, mailer email.Sender, store storage.Store, log *slog.Logger) *Handlers {
+	return &Handlers{Cfg: cfg, Queries: q, Sessions: sessions, Mailer: mailer, Store: store, Log: log}
 }
 
 // Home renders the landing page. If the visitor is signed in we send them to

@@ -71,12 +71,52 @@ So SignFlow implements sessions idiomatically — not a JWT wearing a cookie cos
 - **CSRF:** `gorilla/csrf` on every unsafe method, token embedded as a hidden field in
   each form (and the logout button). Production keeps its strict Origin/Referer check;
   local plaintext HTTP is explicitly marked so dev works without HTTPS.
+
+> **📎 Teaching note — the "referer not supplied" gotcha (for the CSRF lesson).**
+> Submit a form on `http://localhost` with `gorilla/csrf` at defaults and you get a
+> `403 Forbidden - referer not supplied` (or `referer invalid`). This is not a bug —
+> it's CSRF protection doing its job. gorilla/csrf v1.7.3 assumes it's serving over
+> HTTPS and, for unsafe methods, demands the request's `Origin`/`Referer` prove it
+> came from the same secure origin (so an HTTP machine-in-the-middle can't forge a
+> submission). Plain-HTTP localhost has no such proof, so it's rejected. The fix is
+> to *tell* the middleware the request really is plaintext HTTP via
+> `csrf.PlaintextHTTPRequest(r)` — which we do **in dev only** (see
+> [`internal/handlers/router.go`](internal/handlers/router.go)), leaving the strict
+> check fully armed in production. The lesson: CSRF defense is about *proving
+> same-origin intent*, and the token is only half of it — the Origin/Referer check is
+> the other half.
 - **Account-enumeration resistant:** login uses one generic error for every failure,
   and "forgot password" always shows the same confirmation whether or not the email
   exists.
 - **Password reset:** single-use, 1-hour token (hash stored, raw token in the link).
   Completing a reset burns all outstanding tokens and deletes all of that user's
   sessions.
+
+## Documents & file storage
+
+Uploading accepts **any file type** (SignFlow is not a PDF tool). On upload the file
+is streamed to storage and **SHA-256 hashed in the same pass** — never fully buffered
+in memory — and the hash is stored on the record. That hash is what later lets a
+signer pin the exact bytes they signed, and lets anyone re-verify the file is
+unchanged.
+
+- **Where files live:** an `internal/storage.Store` interface with a local-disk
+  implementation (`LocalStore`), mirroring the email pattern. Dev writes to `./uploads`.
+- **Business rule:** only a **draft** can be deleted. Once a document is `sent`, its
+  record is immutable (the delete query itself filters on `status = 'draft'`).
+- **Authorization:** every document read/delete is **owner-scoped in the SQL query**
+  (`WHERE ... AND owner_id = $me`), so one user literally cannot load another user's
+  document — a foreign ID returns 404, not 403 (we don't leak existence). Verified
+  with a second account.
+
+> **⚠️ Railway's filesystem is ephemeral — decide this now, not at deploy.**
+> A container's local disk is wiped on every deploy and restart. `LocalStore` writing
+> to `./uploads` is fine for dev but on Railway your uploaded files would vanish on the
+> next deploy. For production you must either (a) attach a **Railway Volume** and point
+> `UPLOAD_DIR` at its mount path, or (b) implement `storage.Store` against object
+> storage (S3 / Cloudflare R2). The interface exists precisely so this is a swap, not a
+> rewrite. We'll make the call in the deploy phase; flagging it here so it's a decision,
+> not a surprise.
 
 ## Domain
 
@@ -148,7 +188,7 @@ This app is being built in phases:
 
 1. ✅ **Skeleton** — module, Chi, Templ, goose, Postgres, one page rendering.
 2. ✅ **Auth** — register / login / logout / password reset with server-side sessions, CSRF, bcrypt.
-3. ⬜ Documents — upload, hash, dashboard.
+3. ✅ **Documents** — upload (any type), SHA-256 hash, owner-scoped dashboard, view, download, delete-draft.
 4. ⬜ Signing — invite, tokened link, sign, status transitions.
 5. ⬜ Audit trail.
 6. ⬜ Deploy to Railway.

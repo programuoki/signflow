@@ -253,12 +253,6 @@ func (h *Handlers) Reset(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
 }
 
-// --- Dashboard ---
-
-func (h *Handlers) Dashboard(w http.ResponseWriter, r *http.Request) {
-	render(w, r, http.StatusOK, web.Dashboard(h.nav(r)))
-}
-
 // --- helpers ---
 
 func normalizeEmail(s string) string { return strings.ToLower(strings.TrimSpace(s)) }

@@ -1,0 +1,129 @@
+package web
+
+import "fmt"
+
+// Dashboard is the signed-in home: an upload card plus the owner's document list.
+templ Dashboard(nav Nav, docs []DocumentView) {
+	@Layout("Dashboard", nav) {
+		<section class="hero">
+			<h1>Your documents</h1>
+			<p class="lead">Upload a file, then invite signers. Any file type works —
+				SignFlow hashes it on upload so you can prove it hasn't changed.</p>
+		</section>
+		<section class="card upload-card">
+			<h2>Upload a document</h2>
+			<form
+				id="upload-form"
+				hx-post="/documents"
+				hx-encoding="multipart/form-data"
+				hx-target="#doc-list"
+				hx-swap="outerHTML"
+				hx-on::after-request="if(event.detail.successful){this.reset();}"
+			>
+				<div class="upload-row">
+					<input type="file" name="file" required/>
+					<button class="btn btn-primary" type="submit">Upload</button>
+				</div>
+				<progress id="upload-progress" value="0" max="100"></progress>
+			</form>
+			<p id="upload-error" class="flash flash-error" hidden></p>
+		</section>
+		@DocumentList(docs)
+		<script>
+			(function () {
+				var form = document.getElementById('upload-form');
+				var prog = document.getElementById('upload-progress');
+				var err = document.getElementById('upload-error');
+				if (!form) return;
+				form.addEventListener('htmx:xhr:loadstart', function () { prog.classList.add('active'); prog.value = 0; err.hidden = true; });
+				form.addEventListener('htmx:xhr:progress', function (e) { if (e.detail.lengthComputable) prog.value = (e.detail.loaded / e.detail.total) * 100; });
+				form.addEventListener('htmx:afterRequest', function (e) {
+					prog.classList.remove('active');
+					if (!e.detail.successful) { err.textContent = 'Upload failed (file too large, or an error occurred).'; err.hidden = false; }
+				});
+			})();
+		</script>
+	}
+}
+
+// DocumentList is the swappable partial that HTMX refreshes after upload/delete.
+templ DocumentList(docs []DocumentView) {
+	<section id="doc-list" class="card">
+		<h2>Documents</h2>
+		if len(docs) == 0 {
+			<p class="muted">No documents yet. Upload one above to get started.</p>
+		} else {
+			<table class="table">
+				<thead>
+					<tr>
+						<th>Name</th>
+						<th>Status</th>
+						<th>Size</th>
+						<th>Uploaded</th>
+						<th></th>
+					</tr>
+				</thead>
+				<tbody>
+					for _, d := range docs {
+						@documentRow(d)
+					}
+				</tbody>
+			</table>
+		}
+	</section>
+}
+
+templ documentRow(d DocumentView) {
+	<tr>
+		<td><a href={ templ.SafeURL("/documents/" + d.ID) }>{ d.Filename }</a></td>
+		<td><span class={ "pill", "pill-" + d.Status }>{ d.Status }</span></td>
+		<td>{ d.SizeHuman }</td>
+		<td>{ d.CreatedAt }</td>
+		<td class="row-actions">
+			<a class="btn btn-ghost btn-sm" href={ templ.SafeURL("/documents/" + d.ID) }>View</a>
+			if d.IsDraft {
+				<button
+					class="btn btn-danger btn-sm"
+					hx-post={ "/documents/" + d.ID + "/delete" }
+					hx-target="#doc-list"
+					hx-swap="outerHTML"
+					hx-confirm={ fmt.Sprintf("Delete draft %q? This can't be undone.", d.Filename) }
+				>Delete</button>
+			}
+		</td>
+	</tr>
+}
+
+// DocumentDetail shows a single document's metadata, hash, and status.
+templ DocumentDetail(nav Nav, d DocumentView) {
+	@Layout(d.Filename, nav) {
+		<p><a href="/dashboard">← Back to documents</a></p>
+		<section class="card">
+			<div class="doc-head">
+				<h1>{ d.Filename }</h1>
+				<span class={ "pill", "pill-" + d.Status }>{ d.Status }</span>
+			</div>
+			<dl class="meta">
+				<dt>Type</dt>
+				<dd>{ d.ContentType }</dd>
+				<dt>Size</dt>
+				<dd>{ d.SizeHuman }</dd>
+				<dt>Uploaded</dt>
+				<dd>{ d.CreatedAt }</dd>
+				<dt>SHA-256</dt>
+				<dd><code class="hash">{ d.FileHash }</code></dd>
+			</dl>
+			<div class="cta-row">
+				<a class="btn btn-primary" href={ templ.SafeURL("/documents/" + d.ID + "/download") }>Download</a>
+				if d.IsDraft {
+					<form method="post" action={ templ.SafeURL("/documents/" + d.ID + "/delete") } class="inline-form">
+						@authCSRF(nav.CSRFToken)
+						<button class="btn btn-danger" type="submit">Delete draft</button>
+					</form>
+				}
+			</div>
+			<p class="muted">The SHA-256 above was computed at upload time. Re-download and
+				hash the file to confirm the bytes are unchanged.</p>
+		</section>
+	}
+}

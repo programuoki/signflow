@@ -26,6 +26,7 @@ import (
 	"github.com/programuoki/signflow/internal/email"
 	"github.com/programuoki/signflow/internal/handlers"
 	"github.com/programuoki/signflow/internal/session"
+	"github.com/programuoki/signflow/internal/storage"
 	"github.com/programuoki/signflow/static"
 )
 
@@ -63,7 +64,12 @@ func run(log *slog.Logger) error {
 	queries := db.New(pool)
 	sessions := session.NewManager(queries, cfg.IsProd())
 	mailer := email.New(cfg.EmailSender, cfg.ResendAPIKey, cfg.EmailFrom, log)
-	h := handlers.New(cfg, queries, sessions, mailer, log)
+	store, err := storage.NewLocalStore(cfg.UploadDir)
+	if err != nil {
+		return err
+	}
+	log.Info("file storage: local disk", "dir", cfg.UploadDir)
+	h := handlers.New(cfg, queries, sessions, mailer, store, log)
 
 	staticFS, err := fs.Sub(static.FS, "assets")
 	if err != nil {
